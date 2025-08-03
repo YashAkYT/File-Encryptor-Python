@@ -4,6 +4,16 @@ A simple command-line tool to securely encrypt and decrypt files using a master 
 
 ## Installation
 
+### Prerequisites
+
+- Python 3.8 or higher
+- pip (Python package installer)
+- Git (for cloning the repository)
+
+Optional (for development):
+- A code editor such as VS Code
+
+
 ### 1. Clone the Repository
 
 ```sh
@@ -42,3 +52,4 @@ python3 main.py
 
 **Do not delete `salt.db` or `auth_test_file.bin`.**  
 Deleting these files will reset the app and make it impossible to decrypt any files previously encrypted with your master password. Always keep backups of these files if you want to retain access to your encrypted data.
+
