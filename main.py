@@ -3,6 +3,8 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from base64 import urlsafe_b64encode
 from cryptography.hazmat.primitives import hashes
 import os
+import zipfile
+import shutil
 
 
 slat_file = 'salt.db'
@@ -140,6 +142,100 @@ def decrypt_file(file_path):
     print(f"File {file_name} decrypted successfully.")
     print(f"Decrypted file saved at: {decrypted_file_path}")
 
+def zip_folder(folder_path, output_path=None):
+    if output_path is None:
+        output_path = folder_path.rstrip("/\\") + ".zip"
+    
+    with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for root, dirs, files in os.walk(folder_path):
+            for file in files:
+                abs_file_path = os.path.join(root, file)
+                rel_path = os.path.relpath(abs_file_path, folder_path)
+                zipf.write(abs_file_path, rel_path)
+    
+    return  output_path
+
+def encrypt_folder_files_individually(folder_path):
+    global key
+    if not key:
+        raise ValueError("Encryption key is not set.")
+
+    encrypted_folder_path = new_file_path(folder_path + "_encrypted")
+    os.makedirs(encrypted_folder_path, exist_ok=True)
+    
+    for (root, dirs, files) in os.walk(folder_path):
+        # Create corresponding directory structure in encrypted folder
+        rel_root = os.path.relpath(root, folder_path)
+        if rel_root != '.':
+            encrypted_root = os.path.join(encrypted_folder_path, rel_root)
+            os.makedirs(encrypted_root, exist_ok=True)
+        else:
+            encrypted_root = encrypted_folder_path
+            
+        for file in files:
+            file_path = os.path.join(root, file)
+            encrypted_file_path = os.path.join(encrypted_root, file + "." + encrypted_file_extension)
+
+            file_contents = None
+            with open(file_path, 'rb') as f:
+                file_contents = f.read()
+            
+            encrypted_contents = encrypt_data(file_contents)
+            with open(encrypted_file_path, 'wb') as f:
+                f.write(encrypted_contents)
+    print(f"Folder {folder_path} encrypted successfully.")
+    print(f"Encrypted folder saved at: {encrypted_folder_path}")
+
+def decrypt_folder_files_individually(folder_path):
+    global key
+    if not key:
+        raise ValueError("Decryption key is not set.")
+
+    # Remove "_encrypted" suffix if present, otherwise use original name
+    if folder_path.endswith("_encrypted"):
+        base_folder_name = folder_path[:-len("_encrypted")]
+    else:
+        base_folder_name = folder_path
+    
+    decrypted_folder_path = new_file_path(base_folder_name + "_decrypted")
+    os.makedirs(decrypted_folder_path, exist_ok=True)
+    
+    for (root, dirs, files) in os.walk(folder_path):
+        # Create corresponding directory structure in decrypted folder
+        rel_root = os.path.relpath(root, folder_path)
+        if rel_root != '.':
+            decrypted_root = os.path.join(decrypted_folder_path, rel_root)
+            os.makedirs(decrypted_root, exist_ok=True)
+        else:
+            decrypted_root = decrypted_folder_path
+            
+        for file in files:
+            # Skip files that don't have the encrypted extension
+            if not file.endswith("." + encrypted_file_extension):
+                print(f"Skipping {file} - not an encrypted file")
+                continue
+                
+            file_path = os.path.join(root, file)
+            # Remove the encryption extension properly
+            original_filename = file[:-(len(encrypted_file_extension) + 1)]
+            decrypted_file_path = os.path.join(decrypted_root, original_filename)
+
+            try:
+                file_contents = None
+                with open(file_path, 'rb') as f:
+                    file_contents = f.read()
+
+                decrypted_contents = decrypt_data(file_contents)
+                with open(decrypted_file_path, 'wb') as f:
+                    f.write(decrypted_contents)
+            except Exception as e:
+                print(f"Error decrypting {file}: {e}")
+                continue
+                
+    print(f"Folder {folder_path} decrypted successfully.")
+    print(f"Decrypted folder saved at: {decrypted_folder_path}")
+
+    
 
 def first_setup():
     global salt, key
@@ -187,32 +283,66 @@ def main():
         authenticate()
 
     while True:
-        print("\n1. Encrypt a file")
-        print("2. Decrypt a file")
+        print("\n1. Encrypt a file / folder")
+        print("2. Decrypt a file / folder")
         print("3. Exit")
         choice = input("Enter your choice: ")
 
         if choice == '1':
-            file_path = format_path(input("Enter the path of the file to encrypt: "))
+            file_path = format_path(input("Enter the path of the file / folder to encrypt: "))
             if not os.path.exists(file_path):
                 print("File does not exist.")
                 continue
-            encrypt_file(file_path)
-            print("File encrypted successfully.")
-            print("Do you want to remove original file?")
-            print("1. Yes")
-            print("2. No")
-            choice = input("Enter your choice: ")
-            if choice == '1':
-                os.remove(file_path)
-                print("Original file removed.")
+
+            if os.path.isdir(file_path):
+                while True:
+                    print("Would you like to?:")
+                    print("1. Convert to zip and encrypt")
+                    print("2. Encrypt each file individually")
+                    print("3. Exit")
+                    choice = input("Enter your choice: ")
+                    if choice == '1':
+                        zip_path = zip_folder(file_path)
+                        encrypt_file(zip_path)
+                        os.remove(zip_path)
+                        print("Folder zipped and encrypted successfully.")
+                    elif  choice == '2':
+                        encrypt_folder_files_individually(file_path)
+                    elif choice == '3':
+                        break
+                    else:
+                        print("Invalid choice. Please try again.")
+                        continue
+
+                    print("Do you want to remove original folder?")
+                    print("1. Yes")
+                    print("2. No")
+                    choice = input("Enter your choice: ")
+                    if choice == '1':
+                        shutil.rmtree(file_path)
+                        print("Original folder removed.")
+                    break
+                        
+            else:   
+                encrypt_file(file_path)
+                print("File encrypted successfully.")
+                print("Do you want to remove original file?")
+                print("1. Yes")
+                print("2. No")
+                choice = input("Enter your choice: ")
+                if choice == '1':
+                    os.remove(file_path)
+                    print("Original file removed.")
             
         elif choice == '2':
-            file_path = format_path(input("Enter the path of the file to decrypt: "))
+            file_path = format_path(input("Enter the path of the file / folder to decrypt: "))
             if not os.path.exists(file_path):
                 print("File does not exist.")
                 continue
-            decrypt_file(file_path)
+            if os.path.isdir(file_path):
+                decrypt_folder_files_individually(file_path)
+            else:
+                decrypt_file(file_path)
         elif choice == '3':
             print("Exiting...")
             break

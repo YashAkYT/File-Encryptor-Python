@@ -53,3 +53,12 @@ python3 main.py
 **Do not delete `salt.db` or `auth_test_file.bin`.**  
 Deleting these files will reset the app and make it impossible to decrypt any files previously encrypted with your master password. Always keep backups of these files if you want to retain access to your encrypted data.
 
+## Features
+
+- Encrypt and decrypt individual files with a master password
+- Encrypt and decrypt entire folders (either as a zip or file-by-file)
+- Strong encryption using the `cryptography` library and PBKDF2 key derivation
+- Password validation for security (minimum length, uppercase, lowercase, digit)
+- Automatic handling of duplicate output file/folder names
+- Option to remove original files/folders after encryption or decryption
+- Cross-platform support (Windows, Mac, Linux)
